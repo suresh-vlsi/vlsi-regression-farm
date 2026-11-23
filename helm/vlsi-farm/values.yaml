@@ -1,0 +1,5 @@
+image:
+  controller: vlsi-controller:latest
+  dashboard: vlsi-dashboard:latest
+  runner: vlsi-runner:latest
+dashboardReplicas: 1

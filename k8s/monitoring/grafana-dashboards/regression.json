@@ -1,0 +1,10 @@
+{
+  "title": "VLSI Regression Farm",
+  "schemaVersion": 39,
+  "panels": [
+    {"type": "timeseries", "title": "Tests by status (rate)", "gridPos": {"x":0,"y":0,"w":12,"h":8},
+     "targets": [{"expr": "sum by (status) (rate(vlsi_tests_total[5m]))"}]},
+    {"type": "timeseries", "title": "Avg test duration (s)", "gridPos": {"x":12,"y":0,"w":12,"h":8},
+     "targets": [{"expr": "rate(vlsi_test_duration_seconds_sum[5m]) / rate(vlsi_test_duration_seconds_count[5m])"}]}
+  ]
+}

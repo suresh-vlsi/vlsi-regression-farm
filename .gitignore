@@ -1,0 +1,38 @@
+sim_build*/
+results*.xml
+*.fst
+*.vcd
+__pycache__/
+*.db
+secrets.yaml
+
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Secrets and credentials
+.env
+.env.*
+!.env.example
+secrets.yaml
+*.pem
+*.key
+*.p12
+
+# Local databases and logs
+*.db
+*.sqlite3
+*.log
+
+# Simulation build artifacts
+sim_build*/
+*.fst
+*.vcd
+*.vvp
+
+# Temporary files
+.DS_Store
+.vscode/
+.gitignore.backup

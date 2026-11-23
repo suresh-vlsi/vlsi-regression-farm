@@ -1,0 +1,54 @@
+{
+  "design": "fifo",
+  "depth": 16,
+  "coverage_type": "cocotb_functional",
+  "covered_bins": 9,
+  "total_bins": 10,
+  "coverage_percent": 90.0,
+  "bins": {
+    "reset": {
+      "covered": true,
+      "hits": 1
+    },
+    "write_accepted": {
+      "covered": true,
+      "hits": 280
+    },
+    "read_accepted": {
+      "covered": true,
+      "hits": 267
+    },
+    "empty_observed": {
+      "covered": true,
+      "hits": 1
+    },
+    "full_observed": {
+      "covered": true,
+      "hits": 35
+    },
+    "simultaneous_read_write": {
+      "covered": true,
+      "hits": 151
+    },
+    "write_pointer_wrap": {
+      "covered": true,
+      "hits": 17
+    },
+    "read_pointer_wrap": {
+      "covered": true,
+      "hits": 16
+    },
+    "write_rejected_full": {
+      "covered": true,
+      "hits": 19
+    },
+    "read_rejected_empty": {
+      "covered": false,
+      "hits": 0
+    }
+  },
+  "accepted_writes": 280,
+  "accepted_reads": 267,
+  "seed": 11,
+  "testcase": "test_random"
+}

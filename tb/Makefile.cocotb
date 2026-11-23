@@ -1,0 +1,14 @@
+# Usage: make -f Makefile.cocotb TOPLEVEL=fifo MODULE=test_fifo VERILOG_SOURCES=../rtl/fifo/fifo.v
+SIM ?= icarus
+TOPLEVEL_LANG ?= verilog
+TOPLEVEL ?= fifo
+MODULE ?= test_fifo
+VERILOG_SOURCES ?= $(shell pwd)/../rtl/fifo/fifo.v
+export PYTHONPATH := $(shell pwd):$(shell pwd)/common:$(PYTHONPATH)
+
+ifeq ($(SIM),verilator)
+EXTRA_ARGS += --trace-fst --coverage
+WAVES ?= 1
+endif
+
+include $(shell cocotb-config --makefiles)/Makefile.sim

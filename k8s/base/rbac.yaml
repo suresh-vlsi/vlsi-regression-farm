@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: controller, namespace: vlsi-farm}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: job-manager, namespace: vlsi-farm}
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: controller-job-manager, namespace: vlsi-farm}
+subjects: [{kind: ServiceAccount, name: controller, namespace: vlsi-farm}]
+roleRef: {kind: Role, name: job-manager, apiGroup: rbac.authorization.k8s.io}

@@ -1,0 +1,23 @@
+# One entry per cocotb test. Each seed becomes one K8s Job.
+defaults:
+  timeout_s: 300
+  sim: icarus
+tests:
+  - name: fifo_directed
+    top: fifo
+    module: test_fifo
+    testcase: test_basic_write_read
+    sources: [rtl/fifo/fifo.v]
+    seeds: [1]
+  - name: fifo_full
+    top: fifo
+    module: test_fifo
+    testcase: test_fill_to_full
+    sources: [rtl/fifo/fifo.v]
+    seeds: [1]
+  - name: fifo_random
+    top: fifo
+    module: test_fifo
+    testcase: test_random
+    sources: [rtl/fifo/fifo.v]
+    seeds: [11, 22, 33, 44, 55, 66, 77, 88]

@@ -1,0 +1,514 @@
+from datetime import datetime
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse, JSONResponse
+from sqlalchemy import case, func
+from models import Result, get_session
+
+app = FastAPI(title="VLSI Regression Farm Dashboard")
+
+
+def dashboard_data():
+    s = get_session()
+    try:
+        runs = (
+            s.query(
+                Result.run_id.label("run_id"),
+                func.count(Result.id).label("total"),
+                func.sum(case((Result.status == "pass", 1), else_=0)).label("passed"),
+                func.sum(case((Result.status == "fail", 1), else_=0)).label("failed"),
+                func.max(Result.created_at).label("last_seen"),
+                func.avg(Result.duration_s).label("avg_duration"),
+                func.sum(Result.duration_s).label("total_duration"),
+            )
+            .group_by(Result.run_id)
+            .order_by(func.max(Result.created_at).desc())
+            .limit(20)
+            .all()
+        )
+
+        recent_runs = []
+        for r in runs:
+            total = r.total or 0
+            passed = r.passed or 0
+            failed = r.failed or 0
+            recent_runs.append({
+                "run_id": r.run_id,
+                "total": total,
+                "passed": passed,
+                "failed": failed,
+                "rate": round(100 * passed / total) if total else 0,
+                "last_seen": r.last_seen.isoformat() if r.last_seen else "",
+                "avg_duration": round(float(r.avg_duration or 0), 2),
+                "total_duration": round(float(r.total_duration or 0), 2),
+            })
+
+        latest_run = recent_runs[0]["run_id"] if recent_runs else None
+
+        latest_results = []
+        if latest_run:
+            records = (
+                s.query(Result)
+                .filter(Result.run_id == latest_run)
+                .order_by(Result.id.desc())
+                .all()
+            )
+            latest_results = [{
+                "test": r.test,
+                "seed": r.seed,
+                "status": r.status,
+                "duration": r.duration_s,
+                "error": r.error_signature or "",
+            } for r in records]
+
+        failures = (
+            s.query(Result)
+            .filter(Result.status == "fail")
+            .order_by(Result.created_at.desc())
+            .limit(10)
+            .all()
+        )
+
+        recent_failures = [{
+            "run_id": r.run_id,
+            "test": r.test,
+            "seed": r.seed,
+            "error": r.error_signature or "No error signature recorded",
+            "created_at": r.created_at.isoformat() if r.created_at else "",
+        } for r in failures]
+
+        latest = recent_runs[0] if recent_runs else {
+            "run_id": "No campaigns yet",
+            "total": 0,
+            "passed": 0,
+            "failed": 0,
+            "rate": 0,
+        }
+
+        return {
+            "latest": latest,
+            "runs": recent_runs,
+            "results": latest_results,
+            "failures": recent_failures,
+            "analytics": {
+                "campaigns": [
+                    {
+                        "run_id": r["run_id"],
+                        "pass_rate": r["rate"],
+                        "passed": r["passed"],
+                        "failed": r["failed"],
+                        "avg_duration": r["avg_duration"],
+                        "total_duration": r["total_duration"],
+                    }
+                    for r in reversed(recent_runs)
+                ],
+                "total_passed": sum(r["passed"] for r in recent_runs),
+                "total_failed": sum(r["failed"] for r in recent_runs),
+            },
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+        }
+    finally:
+        s.close()
+
+
+@app.get("/api/dashboard")
+def dashboard_api():
+    return JSONResponse(dashboard_data())
+
+
+@app.get("/", response_class=HTMLResponse)
+def index():
+    return """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="0;url=/dashboard">
+<title>VLSI Regression Farm</title>
+</head>
+<body>Loading dashboard...</body>
+</html>
+"""
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard():
+    return """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VLSI Regression Farm</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg:#0b1120; --panel:#151e30; --border:#26344b;
+  --muted:#91a2ba; --text:#edf3fc; --green:#35d39a;
+  --red:#ff657a; --blue:#65a8ff; --yellow:#f4c66a;
+}
+* {box-sizing:border-box}
+body {
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:Inter,Segoe UI,Arial,sans-serif;
+}
+header {
+  padding:28px 5%; border-bottom:1px solid var(--border);
+  display:flex; justify-content:space-between; align-items:center;
+  flex-wrap:wrap; gap:12px;
+}
+h1 {margin:0;font-size:25px}
+h1 span {color:var(--blue)}
+header p {color:var(--muted);margin:7px 0 0;font-size:13px}
+main {max-width:1400px;margin:auto;padding:28px 5%}
+.section-title {font-size:18px;margin:30px 0 15px}
+.cards {
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:16px;
+}
+.card,.panel {
+  background:var(--panel);border:1px solid var(--border);
+  border-radius:12px;padding:20px;
+}
+.card .label {color:var(--muted);font-size:13px}
+.card .value {font-size:30px;font-weight:700;margin-top:12px}
+.green {color:var(--green)} .red {color:var(--red)}
+.blue {color:var(--blue)} .yellow {color:var(--yellow)}
+.panel {overflow-x:auto}
+table {width:100%;border-collapse:collapse;min-width:600px}
+th,td {
+  text-align:left;padding:13px 12px;
+  border-bottom:1px solid var(--border);font-size:13px;
+}
+th {color:var(--muted);font-weight:600}
+td {color:var(--text)}
+.status {
+  display:inline-block;padding:5px 9px;border-radius:20px;
+  font-size:11px;font-weight:700;text-transform:uppercase;
+}
+.pass {background:#123d32;color:var(--green)}
+.fail {background:#48232e;color:var(--red)}
+.other {background:#3b3421;color:var(--yellow)}
+.muted {color:var(--muted)}
+.analytics-grid {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:16px;
+}
+.chart-panel {
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:20px;
+  min-width:0;
+}
+.chart-panel h3 {margin:0 0 8px;font-size:15px}
+.chart-note {color:var(--muted);font-size:12px;margin-bottom:16px}
+.chart svg {width:100%;height:auto;display:block}
+.chart-empty {
+  min-height:150px;display:grid;place-items:center;
+  color:var(--muted);font-size:13px;text-align:center;
+}
+.topline {
+  display:flex;justify-content:space-between;align-items:center;
+  flex-wrap:wrap;gap:12px;
+}
+.live {color:var(--green);font-size:12px}
+footer {color:var(--muted);font-size:12px;margin-top:25px}
+@media(max-width:800px) {
+  .cards {grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:480px) {
+  .cards {grid-template-columns:1fr}
+  header {padding:20px}
+  main {padding:20px}
+}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>VLSI <span>Regression Farm</span></h1>
+    <p>RTL verification · Automated regression · Kubernetes execution</p>
+  </div>
+  <div class="live">● LIVE MONITORING · Refreshes every 5 seconds</div>
+</header>
+
+<main>
+  <div class="topline">
+    <h2 class="section-title">Latest campaign</h2>
+    <span class="muted" id="updated">Connecting...</span>
+  </div>
+
+  <div class="cards">
+    <div class="card"><div class="label">Campaign ID</div>
+      <div class="value blue" id="runid" style="font-size:19px">—</div></div>
+    <div class="card"><div class="label">Total tests</div>
+      <div class="value" id="total">—</div></div>
+    <div class="card"><div class="label">Passed</div>
+      <div class="value green" id="passed">—</div></div>
+    <div class="card"><div class="label">Failed / Pass rate</div>
+      <div class="value red" id="failed">—</div>
+      <div class="muted" id="rate">—</div></div>
+  </div>
+
+  <h2 class="section-title">Regression analytics</h2>
+  <div class="analytics-grid">
+    <div class="chart-panel">
+      <h3>Pass-rate trend</h3>
+      <div class="chart-note">Pass percentage per campaign</div>
+      <div class="chart" id="passTrend"></div>
+    </div>
+    <div class="chart-panel">
+      <h3>Test outcome distribution</h3>
+      <div class="chart-note">Passed versus failed tests</div>
+      <div class="chart" id="outcomes"></div>
+    </div>
+    <div class="chart-panel">
+      <h3>Average simulation duration</h3>
+      <div class="chart-note">Average seconds per test</div>
+      <div class="chart" id="avgDuration"></div>
+    </div>
+    <div class="chart-panel">
+      <h3>Total simulation time</h3>
+      <div class="chart-note">Sum of test durations per campaign</div>
+      <div class="chart" id="totalDuration"></div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Latest campaign — test results</h2>
+  <div class="panel">
+    <table>
+      <thead><tr><th>Test</th><th>Seed</th><th>Status</th>
+      <th>Duration</th><th>Error</th></tr></thead>
+      <tbody id="results"><tr><td colspan="5">Loading...</td></tr></tbody>
+    </table>
+  </div>
+
+  <h2 class="section-title">Recent regression campaigns</h2>
+  <div class="panel">
+    <table>
+      <thead><tr><th>Campaign</th><th>Total</th><th>Passed</th>
+      <th>Failed</th><th>Pass rate</th><th>Last activity</th></tr></thead>
+      <tbody id="runs"><tr><td colspan="6">Loading...</td></tr></tbody>
+    </table>
+  </div>
+
+  <h2 class="section-title">Historical failures</h2>
+  <div class="panel">
+    <table>
+      <thead><tr><th>Campaign</th><th>Test</th><th>Seed</th>
+      <th>Error</th><th>Recorded at</th></tr></thead>
+      <tbody id="failures"><tr><td colspan="5">No data</td></tr></tbody>
+    </table>
+  </div>
+  <footer>VLSI Regression Farm · PostgreSQL-backed dashboard · Auto-refresh enabled</footer>
+</main>
+
+<script>
+const el = id => document.getElementById(id);
+function cell(value) {
+  const td = document.createElement("td");
+  td.textContent = value ?? "—";
+  return td;
+}
+function row(values) {
+  const tr = document.createElement("tr");
+  values.forEach(v => tr.appendChild(cell(v)));
+  return tr;
+}
+function statusCell(value) {
+  const td = document.createElement("td");
+  const span = document.createElement("span");
+  const state = String(value || "unknown").toLowerCase();
+  span.className = "status " + (state === "pass" ? "pass" :
+                  state === "fail" ? "fail" : "other");
+  span.textContent = state;
+  td.appendChild(span);
+  return td;
+}
+function fill(id, rows, emptyMessage, columns) {
+  const body = el(id);
+  body.replaceChildren();
+  if (!rows.length) {
+    const tr = document.createElement("tr");
+    const td = cell(emptyMessage);
+    td.colSpan = columns;
+    tr.appendChild(td);
+    body.appendChild(tr);
+    return;
+  }
+  rows.forEach(r => body.appendChild(r));
+}
+function drawCampaignBars(targetId, campaigns, key, suffix, color) {
+  const target = el(targetId);
+  target.replaceChildren();
+
+  if (!campaigns.length) {
+    target.textContent = "No campaign data available yet";
+    target.className = "chart chart-empty";
+    return;
+  }
+
+  target.className = "chart";
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 560 220");
+
+  const left = 45, top = 20, plotHeight = 145;
+  const max = Math.max(1, ...campaigns.map(c => Number(c[key] || 0)));
+  const slot = 490 / campaigns.length;
+  const barWidth = Math.min(55, slot * 0.55);
+
+  [0, 0.5, 1].forEach(f => {
+    const y = top + plotHeight * (1 - f);
+    const line = document.createElementNS(ns, "line");
+    line.setAttribute("x1", left);
+    line.setAttribute("x2", 545);
+    line.setAttribute("y1", y);
+    line.setAttribute("y2", y);
+    line.setAttribute("stroke", "#34445c");
+    svg.appendChild(line);
+  });
+
+  campaigns.forEach((c, i) => {
+    const value = Number(c[key] || 0);
+    const h = value / max * plotHeight;
+    const x = left + i * slot + (slot - barWidth) / 2;
+    const y = top + plotHeight - h;
+
+    const rect = document.createElementNS(ns, "rect");
+    rect.setAttribute("x", x);
+    rect.setAttribute("y", y);
+    rect.setAttribute("width", barWidth);
+    rect.setAttribute("height", Math.max(1, h));
+    rect.setAttribute("rx", 5);
+    rect.setAttribute("fill", color);
+    svg.appendChild(rect);
+
+    const label = document.createElementNS(ns, "text");
+    label.setAttribute("x", x + barWidth / 2);
+    label.setAttribute("y", Math.max(13, y - 7));
+    label.setAttribute("fill", "#edf3fc");
+    label.setAttribute("font-size", "11");
+    label.setAttribute("text-anchor", "middle");
+    label.textContent = value.toFixed(1) + suffix;
+    svg.appendChild(label);
+
+    const id = document.createElementNS(ns, "text");
+    id.setAttribute("x", x + barWidth / 2);
+    id.setAttribute("y", 195);
+    id.setAttribute("fill", "#91a2ba");
+    id.setAttribute("font-size", "10");
+    id.setAttribute("text-anchor", "middle");
+    id.textContent = c.run_id.slice(-8);
+    svg.appendChild(id);
+  });
+
+  target.appendChild(svg);
+}
+
+function renderAnalytics(data) {
+  const a = data.analytics || {};
+  const campaigns = a.campaigns || [];
+
+  drawCampaignBars("passTrend", campaigns, "pass_rate", "%", "#65a8ff");
+  drawCampaignBars("avgDuration", campaigns, "avg_duration", "s", "#f4c66a");
+  drawCampaignBars("totalDuration", campaigns, "total_duration", "s", "#a78bfa");
+
+  const target = el("outcomes");
+  target.replaceChildren();
+  target.className = "chart";
+
+  const passed = Number(a.total_passed || 0);
+  const failed = Number(a.total_failed || 0);
+  const total = passed + failed;
+
+  if (!total) {
+    target.textContent = "No test outcomes available yet";
+    target.className = "chart chart-empty";
+    return;
+  }
+
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 560 200");
+
+  const x = 30, y = 55, width = 500, height = 35;
+  const passWidth = width * passed / total;
+
+  [[x, passWidth, "#35d39a"],
+   [x + passWidth, width - passWidth, "#ff657a"]]
+    .forEach(([bx, bw, color]) => {
+      if (bw <= 0) return;
+      const rect = document.createElementNS(ns, "rect");
+      rect.setAttribute("x", bx);
+      rect.setAttribute("y", y);
+      rect.setAttribute("width", bw);
+      rect.setAttribute("height", height);
+      rect.setAttribute("fill", color);
+      rect.setAttribute("rx", 5);
+      svg.appendChild(rect);
+    });
+
+  [["Passed: " + passed, "#35d39a", 30],
+   ["Failed: " + failed, "#ff657a", 300]]
+    .forEach(([value, color, x]) => {
+      const label = document.createElementNS(ns, "text");
+      label.setAttribute("x", x);
+      label.setAttribute("y", 130);
+      label.setAttribute("fill", color);
+      label.setAttribute("font-size", "16");
+      label.textContent = value;
+      svg.appendChild(label);
+    });
+
+  target.appendChild(svg);
+}
+
+function formatDate(value) {
+  if (!value) return "—";
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? value : d.toLocaleString();
+}
+async function refresh() {
+  try {
+    const response = await fetch("/api/dashboard", {cache:"no-store"});
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const data = await response.json();
+    const latest = data.latest;
+    renderAnalytics(data);
+
+    el("runid").textContent = latest.run_id;
+    el("total").textContent = latest.total;
+    el("passed").textContent = latest.passed;
+    el("failed").textContent = latest.failed;
+    el("rate").textContent = "Pass rate: " + latest.rate + "%";
+    el("updated").textContent = "Updated: " + formatDate(data.updated_at);
+
+    fill("results", data.results.map(r => {
+      const tr = row([r.test, r.seed, "", 
+        r.duration == null ? "—" : Number(r.duration).toFixed(2) + " s",
+        r.error || "—"]);
+      tr.replaceChild(statusCell(r.status), tr.children[2]);
+      return tr;
+    }), "No test results found", 5);
+
+    fill("runs", data.runs.map(r => row([
+      r.run_id, r.total, r.passed, r.failed,
+      r.rate + "%", formatDate(r.last_seen)
+    ])), "No campaigns found", 6);
+
+    fill("failures", data.failures.map(r => row([
+      r.run_id, r.test, r.seed, r.error, formatDate(r.created_at)
+    ])), "No historical failures recorded", 5);
+  } catch (error) {
+    el("updated").textContent = "Connection error: " + error.message;
+  }
+}
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>
+"""

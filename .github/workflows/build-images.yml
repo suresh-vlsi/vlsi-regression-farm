@@ -1,0 +1,20 @@
+name: build-images
+on:
+  push: {branches: [main], paths: ["docker/**", "controller/**", "runner/**", "dashboard/**"]}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions: {contents: read, packages: write}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with: {registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}"}
+      - name: Build and push
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr A-Z a-z)
+          docker build -t ghcr.io/$OWNER/vlsi-eda-base:latest -f docker/eda-base/Dockerfile .
+          docker build --build-arg BASE=ghcr.io/$OWNER/vlsi-eda-base:latest -t ghcr.io/$OWNER/vlsi-runner:${{ github.sha }} -f docker/runner/Dockerfile .
+          docker build -t ghcr.io/$OWNER/vlsi-controller:${{ github.sha }} -f docker/controller/Dockerfile .
+          docker push ghcr.io/$OWNER/vlsi-eda-base:latest
+          docker push ghcr.io/$OWNER/vlsi-runner:${{ github.sha }}
+          docker push ghcr.io/$OWNER/vlsi-controller:${{ github.sha }}

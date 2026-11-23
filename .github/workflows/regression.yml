@@ -1,0 +1,13 @@
+name: rtl-regression
+on:
+  push: {paths: ["rtl/**", "tb/**"]}
+  pull_request: {paths: ["rtl/**", "tb/**"]}
+jobs:
+  quick-sim:       # fast smoke test without a cluster
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y iverilog make python3-pip
+      - run: pip install cocotb==1.9.2 pytest
+      - run: cd tb && make -f Makefile.cocotb
+  # Add a job using a self-hosted runner / kubeconfig secret that calls scripts/submit_regression.sh

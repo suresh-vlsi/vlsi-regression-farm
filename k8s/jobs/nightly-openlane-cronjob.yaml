@@ -1,0 +1,17 @@
+# Stretch goal: nightly RTL->GDSII. Replace image/command with your OpenLane setup.
+apiVersion: batch/v1
+kind: CronJob
+metadata: {name: nightly-openlane, namespace: vlsi-farm}
+spec:
+  schedule: "0 2 * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: openlane
+              image: efabless/openlane:latest
+              command: ["sh", "-c", "echo 'TODO: run flow.tcl for design' "]

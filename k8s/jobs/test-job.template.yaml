@@ -1,0 +1,27 @@
+# Reference only: the controller builds equivalent Jobs via k8s_client.py.
+# Manual try-out:  kubectl apply -f test-job.template.yaml
+apiVersion: batch/v1
+kind: Job
+metadata: {generateName: manual-fifo-random-, namespace: vlsi-farm}
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: runner
+          image: vlsi-runner:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: RUN_ID, value: manual}
+            - {name: TEST_NAME, value: fifo_random}
+            - {name: TOP, value: fifo}
+            - {name: MODULE, value: test_fifo}
+            - {name: TESTCASE, value: test_random}
+            - {name: SOURCES, value: rtl/fifo/fifo.v}
+            - {name: SEED, value: "42"}
+            - {name: CONTROLLER_URL, value: "http://controller:8000"}
+          resources:
+            requests: {cpu: 250m, memory: 256Mi}
+            limits: {cpu: "1", memory: 1Gi}

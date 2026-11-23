@@ -1,0 +1,10 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata: {name: farm, namespace: vlsi-farm}
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - {path: /api, pathType: Prefix, backend: {service: {name: controller, port: {number: 8000}}}}
+          - {path: /, pathType: Prefix, backend: {service: {name: dashboard, port: {number: 8080}}}}
