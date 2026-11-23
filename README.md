@@ -29,18 +29,6 @@ The platform integrates open-source EDA tools, Python-based verification, Docker
 
 ---
 
-## 🌐 Project Links
-
-| Resource | Link |
-|---|---|
-| 🌍 Public Dashboard | [VLSI Regression Farm – Live Website](https://suresh-vlsi.github.io/vlsi-regression-farm/) |
-| 💻 Source Code | [GitHub Repository](https://github.com/suresh-vlsi/vlsi-regression-farm) |
-| 📐 Architecture | [Architecture Documentation](docs/architecture.md) |
-| 📘 Windows & Docker Setup | [Quickstart Guide](docs/windows-docker-quickstart.md) |
-| 🔧 Add an RTL Design | [Integration Guide](docs/adding-a-design.md) |
-
----
-
 ## 🎯 Project Objectives
 
 - Automate RTL simulation and regression execution.
